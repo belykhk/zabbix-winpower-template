@@ -1,0 +1,536 @@
+zabbix_export:
+  version: '6.0'
+  date: '2023-12-25T16:03:53Z'
+  groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
+  templates:
+    - uuid: e09cdf9bfb1d4d63994bc08ed144c458
+      template: 'Template UPS Winpower Web'
+      name: 'Template UPS Winpower Web'
+      groups:
+        - name: Templates
+      items:
+        - uuid: 57ed700c8e464707929046be4775492a
+          name: 'UPS webserver availability'
+          type: SIMPLE
+          key: 'net.tcp.service[https,{HOST.CONN},{$UPS.PORT}]'
+          valuemap:
+            name: 'Service status'
+          tags:
+            - tag: Application
+              value: UPS
+          triggers:
+            - uuid: 947c45bfe3e44289b34aed07b1b9e1ea
+              expression: 'max(/Template UPS Winpower Web/net.tcp.service[https,{HOST.CONN},{$UPS.PORT}],5m)=0'
+              name: 'UPS webserver is not available on {HOST.NAME}'
+              priority: HIGH
+        - uuid: 150868342d434f6fb379937d1947dd35
+          name: 'UPS battery capacity'
+          type: DEPENDENT
+          key: ups.batt.capacity
+          delay: '0'
+          value_type: FLOAT
+          units: '%'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.batCapacity
+            - type: STR_REPLACE
+              parameters:
+                - '%'
+                - ''
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+        - uuid: 1b6d3a7f7e724de4bbea527e3ca5d978
+          name: 'UPS battery time remaining'
+          type: DEPENDENT
+          key: ups.batt.rem
+          delay: '0'
+          units: s
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.batTimeRemain
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // replace input value of xxhxxmxxs to number of seconds
+                  var seconds = 0;
+                  var timeArray = value.split(/h|m|s/);
+                  timeArray = timeArray.filter(function (el) {
+                      return el != "";
+                  });
+                  if (timeArray.length === 1) {
+                      seconds = parseInt(timeArray[0]);
+                  } else if (timeArray.length === 2) {
+                      seconds = parseInt(timeArray[0]) * 60;
+                      seconds += parseInt(timeArray[1]);
+                  } else if (timeArray.length === 3) {
+                      seconds = parseInt(timeArray[0]) * 3600;
+                      seconds += parseInt(timeArray[1]) * 60;
+                      seconds += parseInt(timeArray[2]);
+                  }
+                  return seconds;
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+          triggers:
+            - uuid: 26874b9bf60e452b9d4246760d5ee0bd
+              expression: 'last(/Template UPS Winpower Web/ups.batt.rem)<{$UPS.BAT.TIME.REMAINING.AVG}'
+              name: 'Less than {$UPS.BAT.TIME.REMAINING.AVG} of battery time remaining on {HOST.NAME}'
+              priority: AVERAGE
+              dependencies:
+                - name: 'Less than {$UPS.BAT.TIME.REMAINING.HIGH} of battery time remaining on {HOST.NAME}'
+                  expression: 'last(/Template UPS Winpower Web/ups.batt.rem)<{$UPS.BAT.TIME.REMAINING.HIGH}'
+            - uuid: 0c04bce62ae24d4cb204c13c76ff3214
+              expression: 'last(/Template UPS Winpower Web/ups.batt.rem)<{$UPS.BAT.TIME.REMAINING.DIS}'
+              name: 'Less than {$UPS.BAT.TIME.REMAINING.DIS} of battery time remaining on {HOST.NAME}'
+              priority: DISASTER
+            - uuid: 38202faa50c24b8bb0acc8c2ca923d00
+              expression: 'last(/Template UPS Winpower Web/ups.batt.rem)<{$UPS.BAT.TIME.REMAINING.HIGH}'
+              name: 'Less than {$UPS.BAT.TIME.REMAINING.HIGH} of battery time remaining on {HOST.NAME}'
+              priority: HIGH
+              dependencies:
+                - name: 'Less than {$UPS.BAT.TIME.REMAINING.DIS} of battery time remaining on {HOST.NAME}'
+                  expression: 'last(/Template UPS Winpower Web/ups.batt.rem)<{$UPS.BAT.TIME.REMAINING.DIS}'
+        - uuid: e5ac78de43314b2793c938ee3d55723d
+          name: 'Get UPS data'
+          type: HTTP_AGENT
+          key: ups.data
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          url: '{$UPS.URL}'
+          tags:
+            - tag: Application
+              value: Internal
+        - uuid: 5e6833b6103d4c90b19d47234218de2d
+          name: 'UPS input frequency'
+          type: DEPENDENT
+          key: ups.freq.in
+          delay: '0'
+          value_type: FLOAT
+          units: Hz
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.inFreq
+            - type: STR_REPLACE
+              parameters:
+                - Hz
+                - ''
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+          triggers:
+            - uuid: 96b69b995e9043dc8190fcc8dd7182b6
+              expression: 'max(/Template UPS Winpower Web/ups.freq.in,15m)<{$UPS.INPUT.FREQ.LOW}'
+              name: 'Input frequency is less than {$UPS.INPUT.FREQ.LOW}Hz on {HOST.NAME}'
+              priority: AVERAGE
+            - uuid: b6844c7cd7644d9db76d8b98a6c75279
+              expression: 'min(/Template UPS Winpower Web/ups.freq.in,15m)>{$UPS.INPUT.FREQ.HIGH}'
+              name: 'Input frequency is more than {$UPS.INPUT.FREQ.HIGH}Hz on {HOST.NAME}'
+              priority: AVERAGE
+        - uuid: b7a83efdfe9d414ebcbe937d5130a1cd
+          name: 'UPS output frequency'
+          type: DEPENDENT
+          key: ups.freq.out
+          delay: '0'
+          value_type: FLOAT
+          units: Hz
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.outFreq
+            - type: STR_REPLACE
+              parameters:
+                - Hz
+                - ''
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+        - uuid: 2aa13a04e1e742649d6fae507321c7ba
+          name: 'UPS load'
+          type: DEPENDENT
+          key: ups.load
+          delay: '0'
+          value_type: FLOAT
+          units: '%'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.loadPercent
+            - type: STR_REPLACE
+              parameters:
+                - '%'
+                - ''
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+          triggers:
+            - uuid: 3485a124fb664bcea02145a3f14e10e9
+              expression: 'min(/Template UPS Winpower Web/ups.load,15m)>{$UPS.LOAD.AVG}'
+              name: 'UPS load is more than {$UPS.LOAD.AVG}% on {HOST.NAME}'
+              priority: AVERAGE
+              dependencies:
+                - name: 'UPS load is more than {$UPS.LOAD.HIGH}% on {HOST.NAME}'
+                  expression: 'min(/Template UPS Winpower Web/ups.load,15m)>{$UPS.LOAD.HIGH}'
+            - uuid: fe5af4e2a5ac405388b44616db91fe95
+              expression: 'min(/Template UPS Winpower Web/ups.load,15m)>{$UPS.LOAD.HIGH}'
+              name: 'UPS load is more than {$UPS.LOAD.HIGH}% on {HOST.NAME}'
+              priority: HIGH
+        - uuid: 80fb044afe6d4a3f87fbb1d2467971ff
+          name: 'UPS output power'
+          type: DEPENDENT
+          key: ups.power.out
+          delay: '0'
+          value_type: FLOAT
+          units: '!KW'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.outW
+            - type: STR_REPLACE
+              parameters:
+                - KW
+                - ''
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+        - uuid: 6a13365fed8944ccbfb66331cf26b08c
+          name: 'UPS output apparent power'
+          type: DEPENDENT
+          key: ups.power.out.va
+          delay: '0'
+          value_type: FLOAT
+          units: '!KVA'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.outVA
+            - type: STR_REPLACE
+              parameters:
+                - KVA
+                - ''
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+        - uuid: 2439f99409754e42bd48f361084382a3
+          name: 'UPS status'
+          type: DEPENDENT
+          key: ups.status
+          delay: '0'
+          valuemap:
+            name: 'UPS status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.device.statusIcon
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  //convert input text to int value to store in zabbix
+                  var dict = {
+                      "commlost": 0,
+                      "on": 1,
+                      "online": 2,
+                      "battery": 3,
+                      "warning": 4,
+                      "fault": 5,
+                      "eco": 6,
+                      "bypass": 7
+                  };
+                  return dict[value];
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+        - uuid: 7182ee0d4cd64307aee39d0b82bdc654
+          name: 'UPS temperature'
+          type: DEPENDENT
+          key: ups.temp
+          delay: '0'
+          value_type: FLOAT
+          units: C
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.upsTemp
+            - type: STR_REPLACE
+              parameters:
+                - C
+                - ''
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+          triggers:
+            - uuid: ba65e58ce983489785197c4f03f1bba7
+              expression: 'max(/Template UPS Winpower Web/ups.temp,15m)<{$UPS.TEMP.LOW}'
+              name: 'UPS temperature is less than {$UPS.TEMP.LOW}C on {HOST.NAME}'
+              priority: AVERAGE
+            - uuid: 04d5ca57a3974888957be196080363e3
+              expression: 'min(/Template UPS Winpower Web/ups.temp,15m)>{$UPS.TEMP.HIGH}'
+              name: 'UPS temperature is more than {$UPS.TEMP.HIGH}C on {HOST.NAME}'
+              priority: AVERAGE
+        - uuid: 5b4e66ab077d42c893764c1ecaa96fb5
+          name: 'UPS test status'
+          type: DEPENDENT
+          key: ups.teststatus
+          delay: '0'
+          valuemap:
+            name: 'UPS test status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.status
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // convert input text to int value to store in zabbix
+                  // If value is not found in dictionary, return 2
+                  var dict = {
+                      "Normal": 0,
+                      "UPS Self Testing": 1,
+                  };
+                  var int = dict[value];
+                  if (int === undefined) {
+                      return 2;
+                  } else {
+                      return int;
+                  }
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+          triggers:
+            - uuid: 9463500ccb5c4a05b179276a85ab839d
+              expression: 'last(/Template UPS Winpower Web/ups.teststatus)=1'
+              name: 'UPS is self-testing on {HOST.NAME}'
+              priority: INFO
+        - uuid: b95bdbf94f7a4bbb8db1e579f16a416a
+          name: 'UPS battery voltage'
+          type: DEPENDENT
+          key: ups.volt.bat
+          delay: '0'
+          value_type: FLOAT
+          units: V
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.batV
+            - type: STR_REPLACE
+              parameters:
+                - V
+                - ''
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+        - uuid: bb97d3703160476e845c284d3c36ee99
+          name: 'UPS input voltage'
+          type: DEPENDENT
+          key: ups.volt.in
+          delay: '0'
+          value_type: FLOAT
+          units: V
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.inVolt
+            - type: STR_REPLACE
+              parameters:
+                - V
+                - ''
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+          triggers:
+            - uuid: 3a7692328f504347a223728e3509ff64
+              expression: 'max(/Template UPS Winpower Web/ups.volt.in,15m)<{$UPS.INPUT.VOLTAGE.LOW}'
+              name: 'Input voltage is less than {$UPS.INPUT.VOLTAGE.LOW}V on {HOST.NAME}'
+              priority: AVERAGE
+            - uuid: b6b1fc0196c6437f9ec0607bb6508a1a
+              expression: 'min(/Template UPS Winpower Web/ups.volt.in,15m)>{$UPS.INPUT.VOLTAGE.HIGH}'
+              name: 'Input voltage is more than {$UPS.INPUT.VOLTAGE.HIGH}V on {HOST.NAME}'
+              priority: AVERAGE
+        - uuid: c9fe51abae0e4401821d96ab7e273c34
+          name: 'UPS output voltage'
+          type: DEPENDENT
+          key: ups.volt.out
+          delay: '0'
+          value_type: FLOAT
+          units: V
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.outVolt
+            - type: STR_REPLACE
+              parameters:
+                - V
+                - ''
+          master_item:
+            key: ups.data
+          tags:
+            - tag: Application
+              value: UPS
+      macros:
+        - macro: '{$UPS.BAT.TIME.REMAINING.AVG}'
+          value: 20m
+        - macro: '{$UPS.BAT.TIME.REMAINING.DIS}'
+          value: 5m
+        - macro: '{$UPS.BAT.TIME.REMAINING.HIGH}'
+          value: 10m
+        - macro: '{$UPS.INPUT.FREQ.HIGH}'
+          value: '50.2'
+        - macro: '{$UPS.INPUT.FREQ.LOW}'
+          value: '49.8'
+        - macro: '{$UPS.INPUT.VOLTAGE.HIGH}'
+          value: '253'
+        - macro: '{$UPS.INPUT.VOLTAGE.LOW}'
+          value: '207'
+        - macro: '{$UPS.LOAD.AVG}'
+          value: '60'
+        - macro: '{$UPS.LOAD.HIGH}'
+          value: '80'
+        - macro: '{$UPS.PORT}'
+          value: '8888'
+        - macro: '{$UPS.TEMP.HIGH}'
+          value: '50'
+        - macro: '{$UPS.TEMP.LOW}'
+          value: '15'
+        - macro: '{$UPS.URL}'
+          value: 'https://127.0.0.1:8888/0/json'
+      valuemaps:
+        - uuid: 36e123b489644cd78ffe71d4fff9e648
+          name: 'Service status'
+          mappings:
+            - value: '0'
+              newvalue: Down
+            - value: '1'
+              newvalue: Up
+        - uuid: 05a7e032f30845f7b46aaa0c9728a588
+          name: 'UPS status'
+          mappings:
+            - value: '0'
+              newvalue: 'Communication lost'
+            - value: '1'
+              newvalue: 'On'
+            - value: '2'
+              newvalue: Online
+            - value: '3'
+              newvalue: 'On battery'
+            - value: '4'
+              newvalue: Warning
+            - value: '5'
+              newvalue: Fault
+            - value: '6'
+              newvalue: 'Eco mode'
+            - value: '7'
+              newvalue: Bypass
+        - uuid: aa9dd3d8a2764cc0b50d96dddb8460b3
+          name: 'UPS test status'
+          mappings:
+            - value: '0'
+              newvalue: Normal
+            - value: '1'
+              newvalue: 'UPS Self Testing'
+            - type: DEFAULT
+              newvalue: 'Not normal'
+  triggers:
+    - uuid: aa11d3c090414a2b96b8f4a5816cc6b7
+      expression: 'last(/Template UPS Winpower Web/ups.status)<>2 and last(/Template UPS Winpower Web/ups.teststatus)>1'
+      name: 'UPS {HOST.NAME} is not online'
+      opdata: 'Current status: {ITEM.LASTVALUE1}'
+      priority: DISASTER
+      dependencies:
+        - name: 'UPS webserver is not available on {HOST.NAME}'
+          expression: 'max(/Template UPS Winpower Web/net.tcp.service[https,{HOST.CONN},{$UPS.PORT}],5m)=0'
+  graphs:
+    - uuid: 1122605149da462fa9fc6b7944816e42
+      name: 'UPS battery time and load'
+      graph_items:
+        - color: 199C0D
+          calc_fnc: ALL
+          item:
+            host: 'Template UPS Winpower Web'
+            key: ups.batt.rem
+        - sortorder: '1'
+          color: F63100
+          yaxisside: RIGHT
+          calc_fnc: ALL
+          item:
+            host: 'Template UPS Winpower Web'
+            key: ups.load
+    - uuid: 99c609ba99a045a0a1c6e4ed0fd4022a
+      name: 'UPS frequency'
+      graph_items:
+        - color: 199C0D
+          calc_fnc: ALL
+          item:
+            host: 'Template UPS Winpower Web'
+            key: ups.freq.in
+        - sortorder: '1'
+          color: F63100
+          calc_fnc: ALL
+          item:
+            host: 'Template UPS Winpower Web'
+            key: ups.freq.out
+    - uuid: 2d2ed77b20c141a49bab0111da717931
+      name: 'UPS status'
+      graph_items:
+        - color: 199C0D
+          calc_fnc: ALL
+          item:
+            host: 'Template UPS Winpower Web'
+            key: ups.status
+        - sortorder: '1'
+          color: F63100
+          calc_fnc: ALL
+          item:
+            host: 'Template UPS Winpower Web'
+            key: ups.teststatus
+    - uuid: 84bccf4bf85b4c01ba977e2813ec96ae
+      name: 'UPS temperature'
+      graph_items:
+        - color: 199C0D
+          calc_fnc: ALL
+          item:
+            host: 'Template UPS Winpower Web'
+            key: ups.temp
+    - uuid: bd9b7bfd3c5a49a8b96ba88df5eca853
+      name: 'UPS voltage'
+      graph_items:
+        - color: 199C0D
+          calc_fnc: ALL
+          item:
+            host: 'Template UPS Winpower Web'
+            key: ups.volt.out
+        - sortorder: '1'
+          color: F63100
+          calc_fnc: ALL
+          item:
+            host: 'Template UPS Winpower Web'
+            key: ups.volt.in
